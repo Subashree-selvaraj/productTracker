@@ -4,87 +4,62 @@ pragma solidity ^0.8.0;
 contract SimpleProductTracker {
    
     enum ProductStatus { Created, Shipped, Delivered }
-    address public owner;
+    address public contractOwner;
 
-    constructor(){
-        owner=msg.sender;
+    constructor() {
+        contractOwner = msg.sender;
     }
     
     struct Product {
         uint256 id;
         string name;
-        address owner;
         ProductStatus status;
     }
 
     Product[] public products;
+    mapping(uint256 => address) public productOwners; //  Mapping to track product ownership
 
-    event ownershipTransferred(uint256 id,address previousOwner,address newowner);
-    modifier onlyOwner(){
-        require(msg.sender==owner,"You are not the owner");
+    event OwnershipTransferred(uint256 indexed id, address indexed previousOwner, address indexed newOwner);
+
+    modifier onlyContractOwner() {
+        require(msg.sender == contractOwner, "You are not the contract owner");
         _;
     }
-    function createProduct(uint256 _id,string memory _name) public onlyOwner{
-        Product memory newProduct =Product({
+
+    modifier onlyProductOwner(uint256 _id) {
+        require(productOwners[_id] == msg.sender, "You are not the product owner");
+        _;
+    }
+
+    function createProduct(uint256 _id, string memory _name) public onlyContractOwner {
+        Product memory newProduct = Product({
             id: _id,
             name: _name,
-            owner: msg.sender, // The creator becomes the first owner
-            status: ProductStatus.Created // Default status is "Created"
+            status: ProductStatus.Created
         });
         products.push(newProduct);
+        productOwners[_id] = msg.sender; //  Assign contract owner as initial product owner
     }
 
-    function transferOwnership(uint _id, address _newOwner) public onlyOwner {
-    require(_id < products.length, "Product does not exist");
-    Product storage product = products[_id];
+    function transferOwnership(uint _id, address _newOwner) public onlyProductOwner(_id) {
+        require(_id < products.length, "Product does not exist");
+        require(_newOwner != address(0), "Please enter a valid address");
+        require(products[_id].status == ProductStatus.Delivered, "Ownership can only be transferred after delivery");
 
-    // require(product.owner == msg.sender, "You are not the owner");
-    require(_newOwner != address(0), "Please enter a valid address");
-    
-    require(product.status == ProductStatus.Delivered, "Ownership can only be transferred after delivery");
+        address previousOwner = productOwners[_id];
+        productOwners[_id] = _newOwner; //  Update ownership in mapping
 
-    address previousOwner = product.owner;
-    product.owner = _newOwner;
+        emit OwnershipTransferred(_id, previousOwner, _newOwner);
+    }
 
-    emit ownershipTransferred(_id, previousOwner, _newOwner);
-}
-
-
-    function updateProductStatus(uint256 _productId, ProductStatus _status) public onlyOwner{
+    function updateProductStatus(uint256 _productId, ProductStatus _status) public onlyContractOwner {
         require(_productId < products.length, "Product does not exist"); 
-        Product storage product = products[_productId]; 
-
-        // require(product.owner == msg.sender, "You are not the owner"); 
-        product.status = _status; 
+        products[_productId].status = _status; 
     }
 
-     function getProductDetails(uint256 _productId) public view returns (uint256, string memory, address, ProductStatus) {
+    function getProductDetails(uint256 _productId) public view returns (uint256, string memory, address, ProductStatus) {
         require(_productId < products.length, "Product does not exist"); 
         Product memory product = products[_productId]; 
-        return (product.id, product.name, product.owner, product.status); 
+        return (product.id, product.name, productOwners[_productId], product.status); //  Get owner from mapping
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
